@@ -1,0 +1,28 @@
+{
+  "name": "kai_agents_ts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "COMPSCI 734 Lecture 10: the four Kai agents, ported to TypeScript",
+  "scripts": {
+    "simple": "tsx src/1_simple_agent.ts",
+    "react": "tsx src/2_react_agent_with_tools.ts",
+    "memory": "tsx src/3_react_agent_with_tools_memory.ts",
+    "mcp": "tsx src/4_react_agent_with_tools_memory_mcp.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@langchain/core": "^1.2.3",
+    "@langchain/langgraph": "^1.4.8",
+    "@langchain/mcp-adapters": "^1.1.3",
+    "@langchain/openai": "^1.5.5",
+    "dotenv": "^17.2.1",
+    "zod": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}

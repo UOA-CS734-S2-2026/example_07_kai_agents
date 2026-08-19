@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+    "rootDir": "src",
+
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+
+    // No build step: tsx runs the TypeScript directly, and tsc is here only to
+    // type-check.
+    "noEmit": true
+  },
+  "include": ["src"]
+}

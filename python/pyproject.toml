@@ -1,0 +1,30 @@
+[project]
+name = "kai-agents"
+version = "1.0.0"
+description = "COMPSCI 734 Lecture 10: four agents, each one idea bigger than the last"
+requires-python = ">=3.11"
+
+# Every step's dependencies are declared here, at step 01, even though step 01
+# uses about three of them. One dependency set across every tag means uv sync
+# is a no-op after the first checkout, and stepping through the demo live never
+# stops to install anything.
+dependencies = [
+    "langgraph>=1.2.9",
+    "langchain>=1.3.14",
+    "langchain-openai>=1.4.0",
+    "langchain-mcp-adapters>=0.3.0",
+    "mcp[cli]>=1.28.1",
+    "httpx>=0.28.1",
+    "python-dotenv>=1.0.1",
+]
+
+[dependency-groups]
+dev = ["ruff>=0.9.0"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+# The step files are teaching code: they repeat themselves on purpose, so that
+# each one reads top to bottom without chasing an import into another file.
+select = ["E", "F", "W", "I"]
