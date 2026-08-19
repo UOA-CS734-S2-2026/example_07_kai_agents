@@ -1,0 +1,7 @@
+{
+  // The demo step buttons in the status bar come from the Task Buttons extension.
+  // See DEMO-CONTROLS.md for how the demo stepping system works.
+  "recommendations": [
+    "spencerwmiles.vscode-task-buttons"
+  ]
+}

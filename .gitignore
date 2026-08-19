@@ -1,0 +1,15 @@
+# Dependency trees and caches. git clean -fd leaves ignored files alone, which
+# is what makes stepping through the demo fast: nothing reinstalls mid-lecture.
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+dist/
+
+# The gateway key. Never committed, and it survives every step change.
+.env
+
+.demo-app.pid
+.DS_Store
