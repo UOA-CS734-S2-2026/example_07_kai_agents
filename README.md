@@ -160,8 +160,40 @@ the user one, or the model gets no system prompt at all - which is exactly the
 condition `llm.py` warns about. Steps 03 and 04 assemble their own, so a bare
 user message is fine there.
 
-Steps 03 and 04 also read `user_id` to decide whose memories to look up. Open
-the assistant's config in Studio and set it, or accept `default_user`.
+### Saying whose memories to load
+
+Steps 03 and 04 read `user_id` to decide that. **Manage Assistants**, bottom
+left in Graph mode, is where you set it: it lists the assistants for the
+selected graph, and each one carries a config you can edit. Save one per
+student you want to demonstrate with, and they appear in the dropdown.
+
+The box only exists because those two graphs declare it:
+
+```python
+class KaiConfig(TypedDict, total=False):
+    user_id: str
+
+builder = StateGraph(KaiState, context_schema=KaiConfig)
+```
+
+A graph with no such declaration has no configurable surface as far as the
+tooling is concerned, so Studio renders an empty panel and there is nothing to
+type into. Declaring it changes nothing about how the code reads the value: it
+still arrives as `config["configurable"]["user_id"]`.
+
+Leave it blank and both steps fall back to `default_user`, which is fine for
+the two-thread demo, since what that shows is the thread boundary rather than
+the identity.
+
+That fallback is fussier than it looks. Studio always **puts** a `user_id` in
+the config, taken from whoever is signed in, and `langgraph dev` runs with auth
+disabled, so that identity is the empty string. The key is therefore present
+but empty, a `.get("user_id", "default_user")` default never fires, and the
+store gets handed the namespace `("", "kai_preferences")`, which it rejects:
+namespace labels cannot be empty. Both steps read it as
+`.get("user_id") or "default_user"` for exactly that reason. Nothing in the
+terminal ever hits it, because `answer_stream` passes a real `user_id` every
+time.
 
 ### The two-thread memory demo, in Studio
 
@@ -187,6 +219,15 @@ rather than by the conversation.
 - **Step 04 takes about eight seconds to open.** Building its graph means
   starting the MCP server and asking it what tools it has, and Studio logs that
   delay as an error. It is not one.
+- **Studio's store is stricter than the terminal's.** It wraps the store so it
+  can batch, and that wrapper refuses synchronous calls made on the event
+  loop: `store.search(...)` inside an `async def` node raises
+  `InvalidStateError` telling you to await `asearch` instead. Step 04 is async
+  all the way down for this reason. Step 03 is unaffected, because its node is
+  a plain `def` and LangGraph runs those in a worker thread. Neither shows up
+  in the terminal, where the plain `InMemoryStore` has no such guard.
+- **Editing a step file restarts the server**, which wipes the store, the
+  threads and any assistants you saved. Do not edit mid-demo.
 - Studio supplies its own persistence, so the `InMemorySaver` and
   `InMemoryStore` that step 03 compiles in are ignored here. The behaviour is
   the same; the threads just outlive the process, which they do not in the

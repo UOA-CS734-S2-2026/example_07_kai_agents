@@ -9,6 +9,11 @@ over the Model Context Protocol.
 The behaviour is unchanged, and that IS the demonstration. A protocol boundary
 that changes what the agent can do would be a bad protocol boundary.
 
+The one visible cost is that talking to a server makes this file async, and
+async spreads: the node, the tool and every store call are all awaited here
+where step 03 could stay synchronous. That is worth noticing rather than
+hiding, because it is what adopting a protocol actually feels like.
+
 What it buys: those tools are now mountable by anything that speaks MCP. Next
 lecture, opencode mounts this exact server and asks it the same questions. The
 lab's concierge can be the third host. Write once, mount anywhere - M plus N
@@ -70,16 +75,34 @@ class KaiState(TypedDict):
     messages: Annotated[list, add_messages]
 
 
+class KaiConfig(TypedDict, total=False):
+    """What a caller may set per run, and the reason Studio shows a box for it.
+
+    A graph that does not declare this has no configurable surface as far as
+    the tooling is concerned, so Studio renders nothing and there is no way to
+    say WHOSE memories to load. Declaring it changes no code below: the value
+    still arrives as config["configurable"]["user_id"].
+    """
+
+    user_id: str
+
+
 @tool
-def save_preference(fact: str, config: RunnableConfig) -> str:
+async def save_preference(fact: str, config: RunnableConfig) -> str:
     """Remember a durable fact about this student, so it is known in future conversations.
 
     Use for things that stay true: 'is vegan', 'usually around the Science
     Centre', 'allergic to peanuts'. Do not use it for one-off requests.
     """
     store = get_store()
-    user_id = config["configurable"].get("user_id", "default_user")
-    store.put((user_id, "kai_preferences"), str(uuid.uuid4()), {"text": fact})
+    # `or`, not .get's default: LangGraph Studio always PUTS a user_id in the
+    # config, taken from whoever is signed in, and `langgraph dev` runs with
+    # auth disabled, so that identity is the empty string. The key is present,
+    # so a .get default never fires, and the store is handed the namespace
+    # ("", "kai_preferences") - which it rejects, because a namespace label
+    # cannot be empty. Treating empty as absent covers both callers.
+    user_id = config["configurable"].get("user_id") or "default_user"
+    await store.aput((user_id, "kai_preferences"), str(uuid.uuid4()), {"text": fact})
     return f"Saved: {fact}"
 
 
@@ -97,8 +120,16 @@ async def build_graph(tools):
 
     async def agent_node(state: KaiState, config: RunnableConfig):
         store = get_store()
-        user_id = config["configurable"].get("user_id", "default_user")
-        remembered = [item.value["text"] for item in store.search((user_id, "kai_preferences"))]
+        # Empty as well as absent: see the note in save_preference.
+        user_id = config["configurable"].get("user_id") or "default_user"
+        # asearch, not search: this node is async, and the store the server
+        # hands an async graph refuses synchronous calls on the event loop.
+        # Step 03's node is a plain def, so LangGraph runs it in a worker
+        # thread and the sync call there is fine. This is the one real cost of
+        # going async, and it is easy to miss because the terminal never
+        # complains: the plain InMemoryStore has no such guard.
+        items = await store.asearch((user_id, "kai_preferences"))
+        remembered = [item.value["text"] for item in items]
 
         system = SYSTEM
         if remembered:
@@ -108,7 +139,7 @@ async def build_graph(tools):
         messages = [("system", system), *state["messages"]]
         return {"messages": [await llm_with_tools.ainvoke(messages)]}
 
-    builder = StateGraph(KaiState)
+    builder = StateGraph(KaiState, context_schema=KaiConfig)
     builder.add_node("agent", agent_node)
     builder.add_node("tools", ToolNode(tools))
     builder.add_edge(START, "agent")

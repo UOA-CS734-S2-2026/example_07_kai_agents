@@ -50,6 +50,18 @@ class KaiState(TypedDict):
     messages: Annotated[list, add_messages]
 
 
+class KaiConfig(TypedDict, total=False):
+    """What a caller may set per run, and the reason Studio shows a box for it.
+
+    A graph that does not declare this has no configurable surface as far as
+    the tooling is concerned, so Studio renders nothing and there is no way to
+    say WHOSE memories to load. Declaring it changes no code below: the value
+    still arrives as config["configurable"]["user_id"].
+    """
+
+    user_id: str
+
+
 @tool
 def save_preference(fact: str, config: RunnableConfig) -> str:
     """Remember a durable fact about this student, so it is known in future conversations.
@@ -59,7 +71,13 @@ def save_preference(fact: str, config: RunnableConfig) -> str:
     one-off requests like 'wants lunch now'.
     """
     store = get_store()
-    user_id = config["configurable"].get("user_id", "default_user")
+    # `or`, not .get's default: LangGraph Studio always PUTS a user_id in the
+    # config, taken from whoever is signed in, and `langgraph dev` runs with
+    # auth disabled, so that identity is the empty string. The key is present,
+    # so a .get default never fires, and the store is handed the namespace
+    # ("", "kai_preferences") - which it rejects, because a namespace label
+    # cannot be empty. Treating empty as absent covers both callers.
+    user_id = config["configurable"].get("user_id") or "default_user"
     # The namespace is what makes this cross-thread: it is keyed on the user,
     # and no thread_id appears in it anywhere.
     store.put((user_id, "kai_preferences"), str(uuid.uuid4()), {"text": fact})
@@ -78,7 +96,8 @@ def agent_node(state: KaiState, config: RunnableConfig):
     because that is the only place a model can read anything.
     """
     store = get_store()
-    user_id = config["configurable"].get("user_id", "default_user")
+    # Empty as well as absent: see the note in save_preference.
+    user_id = config["configurable"].get("user_id") or "default_user"
     remembered = [item.value["text"] for item in store.search((user_id, "kai_preferences"))]
 
     system = SYSTEM
@@ -90,7 +109,7 @@ def agent_node(state: KaiState, config: RunnableConfig):
 
 
 def build_graph():
-    builder = StateGraph(KaiState)
+    builder = StateGraph(KaiState, context_schema=KaiConfig)
     builder.add_node("agent", agent_node)
     builder.add_node("tools", ToolNode(get_tools()))
     builder.add_edge(START, "agent")
