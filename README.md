@@ -6,14 +6,16 @@ Four agents, each exactly one idea bigger than the last. The demo repo for
 Everything runs on the UoA Agentic Gateway, and everything talks to the Kai
 Events server, so no step needs an API key of its own or a paid service.
 
-| Step | Tag | New idea | What changes |
+| Step | File | New idea | What changes |
 |---|---|---|---|
-| 1 | `step-01-simple-agent` | a model on its own | one node, no tools; it cannot answer, and says so |
-| 2 | `step-02-react-tools` | the ReAct loop | `ToolNode` + `tools_condition`, three Kai tools |
-| 3 | `step-03-memory` | short and long term memory | a checkpointer per thread, a store per user |
-| 4 | `step-04-mcp` | the protocol boundary | the same tools, now an MCP server |
+| 1 | `1_simple_agent` | a model on its own | one node, no tools; it cannot answer, and says so |
+| 2 | `2_react_agent_with_tools` | the ReAct loop | `ToolNode` + `tools_condition`, three Kai tools |
+| 3 | `3_react_agent_with_tools_memory` | short and long term memory | a checkpointer per thread, a store per user |
+| 4 | `4_react_agent_with_tools_memory_mcp` | the protocol boundary | the same tools, now an MCP server |
 
-`main` sits at the final step.
+All four are on `main`, side by side. Read them in order and each one is a
+short diff on the one before; that is the whole design of the repo. The
+Python and TypeScript trees carry the same four files under the same names.
 
 ## Before anything
 
@@ -108,29 +110,87 @@ mount it from a completely different repo.
   dropped it in version 2.0. Import from `fastmcp`.
 - The tool docstrings **are** the prompt. The model never sees the code, only
   the name, the parameter schema and the description.
+- **The gateway is not hardcoded.** `UOA_BASE_URL` and `UOA_MODEL` in `.env`
+  override the defaults in `python/llm.py` and `typescript/src/runtime.ts`, so
+  the same four agents run against any OpenAI-compatible endpoint, a local
+  Ollama included. Change the model and the temperature note above stops
+  applying: it is about MiniMax-M3.
 
-## Verifying every step
+## Watching the graph run: LangGraph Studio
+
+Everything above prints its trace to the terminal. Studio draws the graph
+instead, lights each node as it fires, and lets you open the state between
+nodes to see what the last one actually put there. It is the same four graphs,
+looked at from the side.
 
 ```bash
-bash <(git show main:verify-tags.sh)            # static checks
-bash <(git show main:verify-tags.sh) --live     # also run the agents
+cd python
+uv run --with "langgraph-cli[inmem]" langgraph dev
 ```
 
-### How to use the demo scripts
+`--with` layers the CLI on top of the project rather than adding it to
+`pyproject.toml`: Studio is a thing you look at the code with, not something
+the code depends on. uv caches the layer, so only the first run is slow.
 
-The buttons in the VS Code status bar step through the tags, or from a
-terminal:
+That starts a local server on port 2024 and opens Studio in the browser,
+pointed at it. Nothing is deployed and nothing leaves the machine: Studio is a
+web front end talking to `localhost`. Ctrl-C stops it.
 
-```bash
-./demo.sh list          # every step, with the current one marked
-./demo.sh next          # forward one step
-./demo.sh prev          # back one step
-./demo.sh jump 03       # straight to a step (two digits)
-./demo.sh reset         # leave the demo, back to main
+Pick a graph from the dropdown at the top left, type into the input panel on
+the left, and press Submit. The graph runs, and the nodes light up as it goes.
+
+### What each graph wants as input
+
+Step 01's state is a single `message` field, so its input is:
+
+```json
+{ "message": "What free food is on campus today?" }
 ```
 
-Stepping is destructive by design: it throws away uncommitted changes so the
-code is exactly right for the next thing you want to show. Your `.env` and
-`.venv` are ignored, so they survive.
+Steps 02 to 04 take a message list:
 
-`DEMO-CONTROLS.md` has the full write-up.
+```json
+{ "messages": [{ "role": "user", "content": "Anything to eat right now?" }] }
+```
+
+with one catch on **step 02**: it is the only step that does not build its own
+system prompt, because `answer_stream` supplies one when it runs from the
+terminal. In Studio you have to add it yourself, as a `system` message ahead of
+the user one, or the model gets no system prompt at all - which is exactly the
+condition `llm.py` warns about. Steps 03 and 04 assemble their own, so a bare
+user message is fine there.
+
+Steps 03 and 04 also read `user_id` to decide whose memories to look up. Open
+the assistant's config in Studio and set it, or accept `default_user`.
+
+### The two-thread memory demo, in Studio
+
+This is the one worth doing here rather than in the terminal, because Studio
+makes the thread boundary visible instead of asking the room to take it on
+trust.
+
+1. Pick `3_react_agent_memory`, set `user_id` to `student`.
+2. Tell it *I'm vegan, and I'm usually around the Science Centre.* Watch it
+   call `save_preference` on its own.
+3. Start a **new thread** (the + button on the thread list), leaving `user_id`
+   alone.
+4. Ask *Anything to eat right now?*
+
+The new thread has an empty transcript and still knows. Open the `agent` node's
+input and the fact is sitting in the system message, put there by the store
+rather than by the conversation.
+
+### Things worth knowing in Studio
+
+- **Steps 02 to 04 still need the Kai Events server** on port 3734, same as the
+  terminal steps.
+- **Step 04 takes about eight seconds to open.** Building its graph means
+  starting the MCP server and asking it what tools it has, and Studio logs that
+  delay as an error. It is not one.
+- Studio supplies its own persistence, so the `InMemorySaver` and
+  `InMemoryStore` that step 03 compiles in are ignored here. The behaviour is
+  the same; the threads just outlive the process, which they do not in the
+  terminal.
+- `python/studio.py` is only the wiring: it hands Studio the same
+  `build_graph()` every step already had. Nothing in a step file changed for
+  it.

@@ -1,0 +1,11 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "1_simple_agent": "./studio.py:simple_agent",
+    "2_react_agent": "./studio.py:react_agent",
+    "3_react_agent_memory": "./studio.py:react_agent_memory",
+    "4_react_agent_memory_mcp": "./studio.py:react_agent_memory_mcp"
+  },
+  "env": "../.env",
+  "python_version": "3.12"
+}

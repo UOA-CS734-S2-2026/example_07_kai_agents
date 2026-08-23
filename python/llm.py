@@ -7,6 +7,10 @@ The UoA Agentic Gateway is OpenAI-compatible. That is worth a sentence: the
 OpenAI HTTP API has become the shape everything speaks, so pointing a client
 at a different base URL is the whole of "changing provider". Nothing below is
 specific to OpenAI the company.
+
+Which is why the base URL and the model are read from the environment, with
+the course gateway as the default. Set UOA_BASE_URL and UOA_MODEL in .env and
+every step here talks to something else, with no code change at all.
 """
 
 import os
@@ -16,8 +20,11 @@ from langchain_openai import ChatOpenAI
 
 load_dotenv()
 
-BASE_URL = "https://agent.elliottwen.info/v1"
-MODEL = "MiniMax-M3"
+# Both are overridable from the environment, so pointing this at a different
+# gateway, or at a local Ollama, is a .env edit rather than a code edit. The
+# defaults are what the course runs on.
+BASE_URL = os.getenv("UOA_BASE_URL", "https://agent.elliottwen.info/v1")
+MODEL = os.getenv("UOA_MODEL", "MiniMax-M3")
 
 
 def get_llm(**kwargs) -> ChatOpenAI:

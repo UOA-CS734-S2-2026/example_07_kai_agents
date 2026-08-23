@@ -3,7 +3,9 @@
 // should differ by the idea each one adds, not by provider plumbing.
 //
 // The UoA Agentic Gateway is OpenAI-compatible, so "changing provider" is a
-// base URL. Nothing here is specific to OpenAI the company.
+// base URL. Nothing here is specific to OpenAI the company, which is why both
+// the base URL and the model come from the environment, with the course
+// gateway as the default.
 
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,8 +18,12 @@ const currentDir = dirname(fileURLToPath(import.meta.url));
 // secret is one copy too many.
 loadEnv({ path: resolve(currentDir, "../../.env") });
 
-export const BASE_URL = "https://agent.elliottwen.info/v1";
-export const MODEL = "MiniMax-M3";
+// Both are overridable from the environment, so pointing this at a different
+// gateway, or at a local Ollama, is a .env edit rather than a code edit. The
+// defaults are what the course runs on. Read after loadEnv() above, or .env
+// would not have been applied yet.
+export const BASE_URL = process.env.UOA_BASE_URL ?? "https://agent.elliottwen.info/v1";
+export const MODEL = process.env.UOA_MODEL ?? "MiniMax-M3";
 
 // Built on demand rather than at module load, so importing a step file without
 // a key is harmless.
